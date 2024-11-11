@@ -36,20 +36,58 @@ def recommend_songs(user_id, user_item_matrix, user_factors, song_factors, song_
     # Map song IDs to titles and return
     return [song_id_to_title.get(song, song) for song, score in recommendations[:n_recommendations]]
 
+# Recommend similar songs to a given song
+def recommend_similar_songs(song_title, song_factors, song_id_to_title, n_recommendations=5):
+    song_id = title_to_song_id.get(song_title)
+    if song_id is None:
+        return ["Song not found"]
+
+    # Find the song vector and compute similarities
+    song_index = list(user_item_matrix.columns).index(song_id)
+    song_vector = song_factors[song_index]
+    similarities = cosine_similarity([song_vector], song_factors)[0]
+
+    # Get top similar songs
+    similar_songs = [(song_id_to_title.get(user_item_matrix.columns[i], user_item_matrix.columns[i]), similarities[i])
+                     for i in np.argsort(similarities)[::-1] if user_item_matrix.columns[i] != song_id]
+    
+    # Return the top N similar songs
+    return [song for song, score in similar_songs[:n_recommendations]]
+
 # Streamlit UI
 st.title("Song Recommendation System")
 
 # Load data and initialize model
 data, song_id_to_title = load_data()
+title_to_song_id = {title: song_id for song_id, title in song_id_to_title.items()}
 user_item_matrix, user_factors, song_factors = create_recommendation_model(data)
 
 # User ID selection
 st.sidebar.title("User Input")
 user_id = st.sidebar.selectbox("Select User ID", data['user'].unique())
 
-# Generate recommendations when the button is clicked
-if st.sidebar.button("Recommend Songs"):
-    recommendations = recommend_songs(user_id, user_item_matrix, user_factors, song_factors, song_id_to_title)
+# Number of recommendations
+n_recommendations = st.sidebar.slider("Number of Recommendations", 1, 10, 5)
+
+# Step 1: Initial recommendations
+if st.sidebar.button("Get Initial Recommendations"):
+    recommendations = recommend_songs(user_id, user_item_matrix, user_factors, song_factors, song_id_to_title, n_recommendations)
+    # Store recommendations in session state to persist them
+    st.session_state['recommendations'] = recommendations
+
+# Display recommendations if they exist in session state
+if 'recommendations' in st.session_state:
+    recommendations = st.session_state['recommendations']
     st.write(f"Recommended Songs for User {user_id}:")
     for song in recommendations:
         st.write(f"- {song}")
+
+    # Allow user to select a song they liked from initial recommendations
+    selected_song = st.selectbox("Select a song you liked from the recommendations", recommendations)
+
+    # Step 2: Recommend similar songs to the selected song
+    if selected_song:
+        similar_songs = recommend_similar_songs(selected_song, song_factors, song_id_to_title, n_recommendations)
+        st.write(f"Songs similar to '{selected_song}':")
+        for song in similar_songs:
+            st.write(f"- {song}")
