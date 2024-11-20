@@ -190,10 +190,10 @@ def main():
         
         with col2:
             st.subheader("Song-based Recommendations")
-            song_id = st.selectbox(
+            song_id = st.multiselect(
                 'Select Song:',
-                options=[(f"{row['title']} - {row['artist_name']}", row['song']) 
-                        for _, row in df[['song', 'title', 'artist_name']].drop_duplicates().iterrows()]
+                options=[f"{row['title']} - {row['artist_name']}" 
+                        for _, row in df[['song', 'title', 'artist_name']].drop_duplicates().iterrows()], 
             )
             if st.button('Get Similar Songs'):
                 similar_songs = recommender.get_similar_songs(song_id[1])
