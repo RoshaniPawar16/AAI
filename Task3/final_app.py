@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import NearestNeighbors
-from sklearn.decomposition import TruncatedSVD
-import numpy as np
 
 # Page config
 st.set_page_config(
@@ -108,13 +106,13 @@ def run_imps(df):
 
     # Collaborative Filtering
     user_song_matrix = df.pivot_table(index='user', columns='song', values='play_count', fill_value=0)
-    svd = TruncatedSVD(n_components=20)
-    user_factors = svd.fit_transform(user_song_matrix)
-    song_factors = svd.components_.T
+    knn_cf = NearestNeighbors(n_neighbors=10, metric='cosine', algorithm='auto')
+    knn_cf.fit(user_song_matrix)
 
-    return df, tfidf, tfidf_matrix, nn, user_song_matrix, user_factors, song_factors
+    return df, tfidf, tfidf_matrix, nn, user_song_matrix, knn_cf
 
-df, tfidf, tfidf_matrix, nn, user_song_matrix, user_factors, song_factors = run_imps(df)
+df = load_data()
+df, tfidf, tfidf_matrix, nn, user_song_matrix, knn_cf = run_imps(df)
 
 # Content-based recommendation function
 def content_based_recommend(song_title, top_n=5):
@@ -126,17 +124,28 @@ def content_based_recommend(song_title, top_n=5):
     except IndexError:
         return pd.DataFrame(columns=['title', 'artist_name', 'release'])
 
+# Collaborative recommendation function using KNN
 def collaborative_recommend(user_id, top_n=5):
     if user_id not in user_song_matrix.index:
         return pd.DataFrame(columns=['title', 'artist_name', 'release'])
 
-    user_vector = user_factors[user_song_matrix.index.get_loc(user_id)]
-    scores = np.dot(song_factors, user_vector)
-
+    # Get the nearest neighbors for the user
+    user_index = user_song_matrix.index.get_loc(user_id)
+    distances, indices = knn_cf.kneighbors(user_song_matrix.iloc[user_index].values.reshape(1, -1), n_neighbors=top_n + 1)
+    
+    # Collect recommendations from neighbors
+    neighbors = indices.flatten()[1:]
     listened_songs = user_song_matrix.loc[user_id][user_song_matrix.loc[user_id] > 0].index
-    scores = {song: score for song, score in zip(user_song_matrix.columns, scores) if song not in listened_songs}
 
-    recommended_songs = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    recommendations = {}
+    for neighbor in neighbors:
+        neighbor_songs = user_song_matrix.iloc[neighbor]
+        for song, play_count in neighbor_songs.items():
+            if song not in listened_songs and play_count > 0:
+                recommendations[song] = recommendations.get(song, 0) + play_count
+
+    # Sort songs by aggregated scores
+    recommended_songs = sorted(recommendations.items(), key=lambda x: x[1], reverse=True)[:top_n]
     recommended_song_ids = [song for song, _ in recommended_songs]
     return df[df['song'].isin(recommended_song_ids)][['title', 'artist_name', 'release']].drop_duplicates()
 
