@@ -2,7 +2,7 @@
 Group Project CA1
 
 
-TASK 3
+TASK 3 ###Riddhi Gujarathi work explanation
 
 Music-Mate : Smart Recommendations
 Music-Mate is a music recommendation platform that combines content-based and collaborative filtering techniques to recommend songs to users based on their preferences. The app uses a dataset of songs and user play counts to suggest songs that a user might like.Approach to the problem is same as earlier 
